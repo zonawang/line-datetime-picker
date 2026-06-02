@@ -1,0 +1,19 @@
+# Dependecy directories
+node_modules/
+npm-cache/
+
+# Debug logs
+npm-debug.log
+yarn-error.log
+
+# Local environment variables
+.env
+.env.example
+
+# Git repository
+.git/
+.gitignore
+
+# Docker config files
+Dockerfile
+.dockerignore
