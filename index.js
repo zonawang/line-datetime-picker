@@ -15,61 +15,111 @@ const config = {
 };
 
 // ==========================================
-// 🧠 Custom Chinese-Compatible Memory Service
+// 🧠 Custom Chinese-Compatible Firestore Memory Service
 // ==========================================
-class ChineseInMemoryMemoryService extends adk.InMemoryMemoryService {
-  async searchMemory(req) {
-    console.log(`[Memory] searchMemory triggered with query: "${req.query}"`);
-    const userKey = `${req.appName}/${req.userId}`;
-    if (!this.sessionEvents[userKey]) {
-      console.log(`[Memory] No previous memories found for key: ${userKey}`);
-      return { memories: [] };
+const { Firestore } = require('@google-cloud/firestore');
+
+class ChineseFirestoreMemoryService {
+  constructor() {
+    console.log('📦 Initializing Google Cloud Firestore Connection...');
+    this.db = new Firestore();
+    this.collectionName = 'crystal_memories';
+  }
+
+  async addSessionToMemory(session) {
+    const userId = session.userId;
+    const sessionId = session.id;
+    const appName = session.appName;
+    console.log(`[FirestoreMemory] Ingesting session "${sessionId}" into Firestore for User: "${userId}"`);
+    
+    try {
+      const docId = `${appName}_${userId}_${sessionId}`;
+      const docRef = this.db.collection(this.collectionName).doc(docId);
+      
+      // Deep clone and serialize events to plain JS objects
+      const eventsData = JSON.parse(JSON.stringify(session.events || []));
+
+      await docRef.set({
+        appName: appName,
+        userId: userId,
+        sessionId: sessionId,
+        lastUpdateTime: session.lastUpdateTime || Date.now(),
+        events: eventsData
+      });
+      console.log(`[FirestoreMemory] Session "${sessionId}" successfully saved to Firestore (Doc: ${docId}).`);
+    } catch (err) {
+      console.error(`❌ [FirestoreMemory] Failed to add session to Firestore:`, err);
     }
+  }
+
+  async searchMemory(req) {
+    console.log(`[FirestoreMemory] searchMemory triggered with query: "${req.query}" for User: "${req.userId}"`);
+    const appName = req.appName;
+    const userId = req.userId;
     const query = req.query.toLowerCase();
     const response = { memories: [] };
-    
-    for (const [sessId, sessionEvents] of Object.entries(this.sessionEvents[userKey])) {
-      for (const event of sessionEvents) {
-        if (!event.content?.parts?.length) {
-          continue;
-        }
-        const joinedText = event.content.parts
-          .map((part) => part.text)
-          .filter((text) => !!text)
-          .join(" ")
-          .toLowerCase();
 
-        // Substring-based matching strategy tailored for Traditional Chinese
-        let matchQuery = false;
-        if (joinedText.includes(query)) {
-          matchQuery = true;
-        } else {
-          const segments = query.split(/\s+/).filter(s => s.length > 0);
-          if (segments.length > 0 && segments.some(seg => joinedText.includes(seg))) {
+    try {
+      // Query Firestore for documents matching appName and userId
+      const snapshot = await this.db.collection(this.collectionName)
+        .where('appName', '==', appName)
+        .where('userId', '==', userId)
+        .get();
+
+      if (snapshot.empty) {
+        console.log(`[FirestoreMemory] No previous memories found in Firestore for key: ${appName}/${userId}`);
+        return response;
+      }
+
+      for (const doc of snapshot.docs) {
+        const data = doc.data();
+        const events = data.events || [];
+
+        for (const event of events) {
+          if (!event.content?.parts?.length) {
+            continue;
+          }
+          const joinedText = event.content.parts
+            .map((part) => part.text)
+            .filter((text) => !!text)
+            .join(" ")
+            .toLowerCase();
+
+          // Substring-based matching strategy tailored for Traditional Chinese & English
+          let matchQuery = false;
+          if (joinedText.includes(query)) {
             matchQuery = true;
           } else {
-            // High-frequency crystal astrology keywords
-            const keywords = ['水晶', '生日', '占卜', '粉晶', '紫水晶', '黃水晶', '綠幽靈', '運勢', '天秤座', '金牛座'];
-            for (const kw of keywords) {
-              if (query.includes(kw) && joinedText.includes(kw)) {
-                matchQuery = true;
-                break;
+            const segments = query.split(/\s+/).filter(s => s.length > 0);
+            if (segments.length > 0 && segments.some(seg => joinedText.includes(seg))) {
+              matchQuery = true;
+            } else {
+              // High-frequency crystal astrology keywords
+              const keywords = ['水晶', '生日', '占卜', '粉晶', '紫水晶', '黃水晶', '綠幽靈', '運勢', '天秤座', '金牛座'];
+              for (const kw of keywords) {
+                if (query.includes(kw) && joinedText.includes(kw)) {
+                  matchQuery = true;
+                  break;
+                }
               }
             }
           }
-        }
 
-        if (matchQuery) {
-          console.log(`[Memory] Match found in history: "${joinedText.substring(0, 50)}..."`);
-          response.memories.push({
-            content: event.content,
-            author: event.author,
-            timestamp: new Date(event.timestamp).toISOString()
-          });
+          if (matchQuery) {
+            console.log(`[FirestoreMemory] Match found in Firestore history: "${joinedText.substring(0, 50)}..."`);
+            response.memories.push({
+              content: event.content,
+              author: event.author,
+              timestamp: new Date(event.timestamp || data.lastUpdateTime).toISOString()
+            });
+          }
         }
       }
+    } catch (err) {
+      console.error('❌ [FirestoreMemory] Error searching memories from Firestore:', err);
     }
-    console.log(`[Memory] Returning ${response.memories.length} historical memory block(s).`);
+
+    console.log(`[FirestoreMemory] Returning ${response.memories.length} historical memory block(s).`);
     return response;
   }
 }
@@ -98,7 +148,7 @@ if (useVertexAi) {
 }
 
 // Instantiate the custom memory service
-const customMemoryService = new ChineseInMemoryMemoryService();
+const customMemoryService = new ChineseFirestoreMemoryService();
 
 // Create the Crystal Expert (專業水晶占星專家) Agent
 const crystalExpertAgent = new adk.LlmAgent({
