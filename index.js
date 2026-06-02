@@ -100,22 +100,23 @@ if (useVertexAi) {
 // Instantiate the custom memory service
 const customMemoryService = new ChineseInMemoryMemoryService();
 
-// Create the Crystal Sorceress (水晶占卜神婆) Agent
-const crystalSorceressAgent = new adk.LlmAgent({
-  name: 'crystal-sorceress',
+// Create the Crystal Expert (專業水晶占星專家) Agent
+const crystalExpertAgent = new adk.LlmAgent({
+  name: 'crystal-expert',
   model: llm,
   instruction: `
-    你是一位精通水晶能量學、五行磁場學與西洋占星術的台灣在地「水晶占卜神婆」。
+    你是一位精通水晶能量學、五行元素、七輪脈輪與西洋占星術的專業水晶占星專家（說話風格如同溫暖理性的「國師」唐綺陽，沈穩、專業、溫柔、深具洞察力與療癒感）。
     
-    【說話風格與語氣】
-    1. 一律使用親切、溫柔、有時帶點神祕感且活潑熱情的繁體中文（台灣繁體）。
-    2. 多多使用台灣在地用語，例如：「親愛的」、「寶貝」、「招桃花」、「避邪避小人」、「水逆」、「磁場」、「正能量」。
-    3. 口吻要像一個經驗豐富、慈祥且樂觀的占卜神婆，多用關懷的句子。
+    【核心規範與說話風格】
+    1. 絕對不要自稱「神婆」或「巫婆」，你是一位專業且理性的占星與水晶能量諮詢專家。
+    2. 語氣切勿過於活潑、浮誇或輕浮（不使用「哎呀」、「寶貝」、「哈哈」等口吻）。請保持從容、沈穩、優雅、溫和且客觀的語調，帶給使用者安心與信任感。
+    3. 適度使用溫暖的關懷用語（例如「親愛的」、「你好，讓我們靜下心來看看...」），以同理心與療癒的角度切入，為使用者分析生活、事業或情感中的能量起伏。
 
-    【核心能力】
-    1. 你能自動結合使用者的生日（星座/命盤）與她收集過的水晶（例如：粉晶、紫水晶、綠幽靈等）來提供完美的每日能量占卜、開運穿搭與水晶磁場搭配建議。
-    2. 你在對話回合前擁有「長效記憶功能」，能主動知道使用者過去說過的生日或展示過的水晶收藏，絕對不要忘記！
-    3. 當使用者詢問水晶搭配或今日運勢時，主動對照她已收集的水晶並做出客製化解讀。
+    【專業分析能力】
+    1. 結合使用者的「生日星盤（太陽/上升/月亮星座）」與「她所擁有的水晶收藏」，進行星座、宮位與礦物晶體共振的深入分析。
+    2. 將行星逆行（如水逆）、星座星象位移，與水晶的特定脈輪（Chakra）或物理頻率作科學與心靈層面的結合，提供精確的日常開運與調和指引。
+    3. 在對話回合前擁有「長效記憶功能」，主動知道使用者過去說過的生日或展示過的水晶收藏，絕對不要忘記！
+    4. 當使用者詢問水晶搭配或今日運勢時，主動對照她已收集的水晶並做出客製化解讀。
   `,
   // 核心：PreloadMemoryTool 只要一行，即可自動在回合開始前預載所有歷史相關對話
   tools: [adk.PRELOAD_MEMORY]
@@ -123,8 +124,8 @@ const crystalSorceressAgent = new adk.LlmAgent({
 
 // Create the ADK Runner to manage sessions, state, and memory
 const runner = new adk.Runner({
-  appName: 'CrystalSorceress',
-  agent: crystalSorceressAgent,
+  appName: 'CrystalAstrology',
+  agent: crystalExpertAgent,
   sessionService: new adk.InMemorySessionService(),
   artifactService: new adk.InMemoryArtifactService(),
   memoryService: customMemoryService
@@ -145,7 +146,7 @@ const app = express();
 
 // Health check endpoint
 app.get('/', (req, res) => {
-  res.send('LINE Crystal Sorceress Bot with Google ADK is running!');
+  res.send('LINE Crystal Astrology Expert Bot with Google ADK is running!');
 });
 
 // Webhook endpoint
@@ -191,7 +192,7 @@ async function handleEvent(event) {
   try {
     // 1. Get or create session
     await runner.sessionService.getOrCreateSession({
-      appName: 'CrystalSorceress',
+      appName: 'CrystalAstrology',
       userId: userId,
       sessionId: sessionId
     });
@@ -227,14 +228,14 @@ async function handleEvent(event) {
             }
           },
           {
-            text: '神婆，這是我拍的水晶照片，請幫我分析鑑定並詳細解說它的能量特徵、五行，以及它與我磁場的契合度。'
+            text: '老師，這是我拍的水晶照片，請幫我分析鑑定並詳細解說它的能量特徵、五行，以及它與我磁場的契合度。'
           }
         ]
       };
     }
 
     // 3. Run the ADK Agent
-    console.log(`🤖 Executing Crystal Sorceress ADK Agent for Session: ${sessionId}...`);
+    console.log(`🤖 Executing Crystal Expert ADK Agent for Session: ${sessionId}...`);
     const run = runner.runAsync({
       userId: userId,
       sessionId: sessionId,
@@ -256,13 +257,13 @@ async function handleEvent(event) {
     }
 
     if (!responseText) {
-      responseText = '🔮 (親愛的，神婆感受到了微弱的磁場波動，但沒能看清命盤呢... 請再跟神婆多說說妳的水晶或生日吧！)';
+      responseText = '🔮 (親愛的，我目前感受到的能量流動有些微弱，沒能完全解析。不妨多跟我分享一些關於你的生日星盤，或是其他水晶收藏，好讓我能為你做更深入的解讀。)';
     }
 
     // 4. Save the completed session to long-term memory
     console.log(`[Memory] Saving conversation session to memory bank...`);
     const updatedSession = await runner.sessionService.getSession({
-      appName: 'CrystalSorceress',
+      appName: 'CrystalAstrology',
       userId: userId,
       sessionId: sessionId
     });
@@ -274,7 +275,7 @@ async function handleEvent(event) {
     console.log(`🤖 Reply text preview: "${responseText.substring(0, 100)}..."`);
   } catch (err) {
     console.error('❌ Error executing ADK Agent or fetching Vertex AI:', err);
-    responseText = `❌ 哎呀親愛的，宇宙磁場好像有點干擾：${err.message || err}`;
+    responseText = `❌ 親愛的，目前能量連結稍微受到一些干擾，請稍後再試。訊息：${err.message || err}`;
   }
 
   // Send the reply back to the user on LINE
@@ -303,7 +304,7 @@ async function handleEvent(event) {
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`\n🚀 ==========================================`);
-  console.log(`🔮 Crystal Sorceress LINE Bot Server listening on port ${PORT}`);
+  console.log(`🔮 Crystal Expert LINE Bot Server listening on port ${PORT}`);
   console.log(`🔮 Loaded with Google ADK & PreloadMemoryTool`);
   console.log(`🔮 Webhook URL: http://localhost:${PORT}/webhook`);
   console.log(`🚀 ==========================================\n`);
