@@ -11,17 +11,7 @@
 * **動態 Sender 變更**：系統在向 LINE 發送訊息前，會主動解析標記並移除，同時將 LINE 訊息的 `sender.name` 與 `sender.iconUrl` 動態變更為對應的守護神暱稱與專屬頭像（雅典娜、維納斯、莫伊萊、艾蓮）。
 * **靜態資源本機託管**：頭像圖檔（`雅典娜.png`、`維納斯.png`、`莫伊萊.png`）直接託管於專案根目錄下，透過 Express 靜態路由 `/static` 動態產出對外網址，實現零外鏈依賴。
 
-### 2. 💬 智慧引導快速回覆 (Smart Quick Replies)
-* **上下文追問生成**：每次老師回答完畢後，系統會自動呼叫 Gemini 2.5 Flash，依據回答的上下文，站在使用者立場即時設計出 3 個最具吸引力的相關追問問題。
-* **字數嚴格適配**：生成的追問問題嚴格限制在 20 個字以內（適配 LINE Quick Reply 按鈕標籤限制），並轉換為 `message` 動作按鈕，呈現在對話框底部，引導使用者點擊繼續深入諮詢。
 
-### 3. 🧠 中繁體中文優化的 Firestore 永久記憶體 (Chinese Firestore Memory)
-* **Firestore 永久儲存**：自製 `ChineseFirestoreMemoryService`，取代原本易隨容器重啟而遺忘的記憶體，將使用者對話與上傳的水晶分析紀錄刻入 Cloud Firestore。
-* **中繁體中文分詞檢索**：徹底解決 ADK 內建 `InMemoryMemoryService` 僅支援英文分詞的 Bug，實作基於 Traditional Chinese 與特定水晶占星高頻詞彙（如：占卜、運勢、粉晶、紫水晶、黃水晶、綠幽靈、生日）的模糊比對與關聯檢索，讓 AI 永遠記得使用者的生日與水晶配置。
-
-### 4. 📸 水晶多模態影像鑑定 (細緻圖像識別)
-* **影像自動下載**：當使用者發送水晶照片時，系統會經由 LINE Messaging Blob API 下載影像，轉換為 Base64。
-* **脈輪與五行解讀**：送至 Gemini 2.5 Flash 進行精細外觀、脈輪與五行共振特徵的鑑定，並自動調用前述的 Firestore 星盤記憶，進行與個人磁場契合度的一對一解讀。
 
 ---
 
