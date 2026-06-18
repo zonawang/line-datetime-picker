@@ -164,9 +164,18 @@ const crystalExpertAgent = new adk.LlmAgent({
 
     【專業分析能力】
     1. 結合使用者的「生日星盤（太陽/上升/月亮星座）」與「她所擁有的水晶收藏」，進行星座、宮位與礦物晶體共振的深入分析。
-    2. 將行星逆行（如水逆）、星座星象位移，與水晶的特定脈輪（Chakra）或物理頻率作科學與心靈層面的結合，提供精確的日常開運與調和指引。
+    2. 將行星逆行（如水逆）、星座星象位移，與水晶的特定脈輪（Chakra） or 物理頻率作科學與心靈層面的結合，提供精確的日常開運與調和指引。
     3. 在對話回合前擁有「長效記憶功能」，主動知道使用者過去說過的生日或展示過的水晶收藏，絕對不要忘記！
     4. 當使用者詢問水晶搭配或今日運勢時，主動對照她已收集的水晶並做出客製化解讀。
+
+    【動態星曜守護神身份切換規範】
+    在回覆使用者之前，請根據當下諮詢的主題、問題性質或能量起伏，在回覆內容的「最開頭（第一行）」輸出專屬的星曜守護神標記（格式為 [DEITY: 標記值]），隨後空一行，再開始正式的回覆內容。系統會自動根據此標記更換你的頭像與暱稱。
+    
+    請從以下標記中精確選擇最符合當下語境的一個（每次回覆只能選擇一個，且務必輸出在最開頭）：
+    1. [DEITY: ATHENA] - 智慧守護神 雅典娜：適用於事業發展、自信建立、學習與學業進步、智慧決策、理性邏輯，或每日開運等積極、睿智的能量主題。
+    2. [DEITY: VENUS] - 金星守護神 維納斯：適用於桃花運勢、愛情婚姻、人際關係、美感提升，或情感心靈療癒等陰性、和諧的能量主題。
+    3. [DEITY: FORTUNE] - 命運之輪 莫伊萊：適用於整體財運、星座運勢起伏、行星逆行（如水逆）調和，或機遇挑戰等命運變化主題。
+    4. [DEITY: COSMOS] - 星曜導師 艾蓮：適用於其他預設或綜合性諮詢、全面的生日星盤解析、水晶基礎鑑定，或尚未明確分類的日常問候。
   `,
   // 核心：PreloadMemoryTool 只要一行，即可自動在回合開始前預載所有歷史相關對話
   tools: [adk.PRELOAD_MEMORY]
@@ -194,6 +203,9 @@ const blobClient = new line.messagingApi.MessagingApiBlobClient({
 
 const app = express();
 
+// Serve local static images (for Icon Switch)
+app.use('/static', express.static(__dirname));
+
 // Health check endpoint
 app.get('/', (req, res) => {
   res.send('LINE Crystal Astrology Expert Bot with Google ADK is running!');
@@ -207,8 +219,13 @@ app.post('/webhook', line.middleware(config), (req, res) => {
 
   console.log(`🤖 Received ${req.body.events.length} webhook event(s) from LINE.`);
 
+  // Extract base URL dynamically from request to serve local static files
+  const protocol = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+  const baseUrl = `${protocol}://${req.get('host')}`;
+  req.baseUrlForIcons = baseUrl;
+
   Promise
-    .all(req.body.events.map(handleEvent))
+    .all(req.body.events.map((event) => handleEvent(event, req)))
     .then((result) => res.json(result))
     .catch((err) => {
       console.error('❌ Error handling events:', err);
@@ -262,9 +279,31 @@ ${responseText}`;
 }
 
 // ==========================================
+// 🪐 Deity Config for Icon Switch (動態身份頭像設定)
+// ==========================================
+const DEITY_CONFIG = {
+  ATHENA: {
+    name: '智慧守護神 雅典娜',
+    iconUrl: process.env.DEITY_ATHENA_ICON || '雅典娜.png'
+  },
+  VENUS: {
+    name: '金星守護神 維納斯',
+    iconUrl: process.env.DEITY_VENUS_ICON || '維納斯.png'
+  },
+  FORTUNE: {
+    name: '命運之輪 莫伊萊',
+    iconUrl: process.env.DEITY_FORTUNE_ICON || '莫伊來.png'
+  },
+  COSMOS: {
+    name: '星曜守護導師 艾蓮',
+    iconUrl: process.env.DEITY_COSMOS_ICON || 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?auto=format&fit=crop&w=128&h=128&q=80'
+  }
+};
+
+// ==========================================
 // 🎯 Event Handler
 // ==========================================
-async function handleEvent(event) {
+async function handleEvent(event, req) {
   // Ignore non-message events
   if (event.type !== 'message') {
     return null;
@@ -403,7 +442,22 @@ async function handleEvent(event) {
     responseText = `❌ 親愛的，目前能量連結稍微受到一些干擾，請稍後再試。訊息：${err.message || err}`;
   }
 
-  // 5. Generate follow-up Quick Replies
+  // 5. Detect and parse Deity Dynamic Identity Tag for Icon Switch
+  let deity = 'COSMOS';
+  const deityRegex = /^\[DEITY:\s*([A-Z]+)\]\s*\n*/i;
+  const match = responseText.match(deityRegex);
+  if (match) {
+    const matchedDeity = match[1].toUpperCase();
+    if (DEITY_CONFIG[matchedDeity]) {
+      deity = matchedDeity;
+    }
+    responseText = responseText.replace(deityRegex, '').trim();
+    console.log(`✨ [IconSwitch] Detected dynamic deity switch: "${deity}"`);
+  } else {
+    console.log(`✨ [IconSwitch] No deity tag found. Falling back to default: "${deity}"`);
+  }
+
+  // 6. Generate follow-up Quick Replies
   let followUpQuestions = null;
   if (isGuide) {
     followUpQuestions = [
@@ -415,10 +469,21 @@ async function handleEvent(event) {
     followUpQuestions = await generateFollowUpQuestions(responseText);
   }
 
-  // Send the reply back to the user on LINE
+  // Resolve dynamic URL for local images served via /static
+  let iconUrl = DEITY_CONFIG[deity].iconUrl;
+  if (!iconUrl.startsWith('http://') && !iconUrl.startsWith('https://')) {
+    const baseUrl = req && req.baseUrlForIcons ? req.baseUrlForIcons : '';
+    iconUrl = `${baseUrl}/static/${encodeURIComponent(iconUrl)}`;
+  }
+
+  // Send the reply back to the user on LINE with dynamic sender
   const replyMessage = {
     type: 'text',
-    text: responseText
+    text: responseText,
+    sender: {
+      name: DEITY_CONFIG[deity].name,
+      iconUrl: iconUrl
+    }
   };
 
   if (followUpQuestions && followUpQuestions.length > 0) {
