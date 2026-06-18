@@ -224,13 +224,15 @@ app.post('/webhook', line.middleware(config), (req, res) => {
   const baseUrl = `${protocol}://${req.get('host')}`;
   req.baseUrlForIcons = baseUrl;
 
-  Promise
-    .all(req.body.events.map((event) => handleEvent(event, req)))
-    .then((result) => res.json(result))
-    .catch((err) => {
-      console.error('❌ Error handling events:', err);
-      res.status(500).end();
+  // Handle events asynchronously in the background so we can respond to LINE immediately
+  req.body.events.forEach((event) => {
+    handleEvent(event, req).catch((err) => {
+      console.error('❌ Error handling event in background:', err);
     });
+  });
+
+  // Respond immediately with HTTP 200 OK to prevent LINE webhook retry timeouts
+  return res.status(200).send('OK');
 });
 
 // ==========================================
