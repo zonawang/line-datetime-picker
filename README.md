@@ -19,6 +19,30 @@
 
 ---
 
+## 💡 關鍵開發經驗與雲端架構注意事項 (重要)
+
+在專案開發過程中，我們曾經歷過 **Flex Message 互動測試** 與 **Webhook 異步效能優化**。以下為本專案在 Google Cloud Run 架構下的重要經驗總結，供後續開發與維護參考：
+
+### 1. 為什麼選擇「純文字 + 守護神頭像 switch + 底部 Quick Reply」而不是 Flex Message？
+* **LINE API Schema 嚴格限制**：LINE 的 Flex Message 在 JSON 結構上有非常嚴格的欄位格式校驗（例如 Header、Body 中的元件屬性，不能有自訂的 avatar、style 等屬性，否則會被 LINE API 拒絕接收）。
+* **沉浸式體驗與客製化**：使用標準 `text` 訊息並在發送時指定 `sender.name` 與 `sender.iconUrl`，能最流暢地在對話中切換「守護神頭像（雅典娜、維納斯、莫伊萊、艾蓮）」，同時搭配底部動態產生的 3 個 20 字以內快速回覆按鈕（Quick Replies），既能引導使用者繼續深入追問，又能保持極佳的閱讀體驗。
+
+### 2. 為什麼 Webhook 必須使用「同步 `Promise.all`」而不能「立刻回覆 HTTP 200 + 背景處理」？
+* **Cloud Run CPU 限制機制 (CPU Throttling)**：
+  在 Cloud Run 中，預設使用的是 **「僅在請求處理期間分配 CPU」**。
+  如果 Webhook 路由中採取 `res.send('OK')` 先秒回 LINE，然後把 `handleEvent` 放在非同步背景中執行，**Cloud Run 會在回覆發出的瞬間將該容器實例的 CPU 資源限制降到接近 0**。
+* **背景凍結 (Hang) 與「沒有反應」**：
+  這會導致背景的 Gemini 占星呼叫、Firestore 記憶讀寫完全卡死或運作極度緩慢，直到有下一次請求（例如其他使用者發送新訊息或新部署）短暫喚醒容器，背景工作才會繼續跑。這會造成嚴重的「傳送訊息後完全沒反應」問題。
+* **正確做法**：
+  保持 Webhook 端點的 `Promise.all` 同步等待：
+  ```javascript
+  Promise.all(req.body.events.map((event) => handleEvent(event, req)))
+    .then((result) => res.json(result))
+  ```
+  這可以確保在 Gemini 處理（通常 2~3 秒內完成）期間，CPU 始終獲得 100% 完整分配，保證 LINE 訊息能以最快速度完成回覆。
+
+---
+
 ## 🛠️ 本地開發與環境設定
 
 在開始運行之前，請確保您已完成以下準備：
