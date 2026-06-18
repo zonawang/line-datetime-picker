@@ -1,6 +1,6 @@
 # 🔮 LINE Crystal Astrology Expert Bot - 本次新增功能說明
 
-本專案已完成最新階段的升級開發，完美整合 Google ADK、Gemini 2.5 Flash 多模態分析、Google Cloud Firestore 與 LINE Messaging API。以下為本次新增之核心特色功能與雲端架構設計說明。
+本專案已完成最新階段的升級開發，完美解決了 LINE 頭像切換靈活性與 Google Cloud Run 執行緒凍結的問題。以下為本次新增之核心特色功能與雲端架構設計說明。
 
 ---
 
@@ -10,8 +10,6 @@
 * **智慧偵測切換**：機器人會依據當下諮詢的主題（如事業、愛情、財運），自動在回覆最開頭帶入守護神標記（如 `[DEITY: ATHENA]`、`[DEITY: VENUS]`、`[DEITY: FORTUNE]`、`[DEITY: COSMOS]`）。
 * **動態 Sender 變更**：系統在向 LINE 發送訊息前，會主動解析標記並移除，同時將 LINE 訊息的 `sender.name` 與 `sender.iconUrl` 動態變更為對應的守護神暱稱與專屬頭像（雅典娜、維納斯、莫伊萊、艾蓮）。
 * **靜態資源本機託管**：頭像圖檔（`雅典娜.png`、`維納斯.png`、`莫伊萊.png`）直接託管於專案根目錄下，透過 Express 靜態路由 `/static` 動態產出對外網址，實現零外鏈依賴。
-
-
 
 ---
 
