@@ -640,26 +640,6 @@ async function handleEvent(event, req) {
   const messageType = event.message.type;
   console.log(`💬 Processing message from User (${userId}) of type: ${messageType}`);
 
-  // Send immediate warm loading feedback using the reply token to prevent 5s timeout
-  const loadingMessage = {
-    type: 'text',
-    text: '🔮 親愛的，我已收到您的訊息。正在為您靜心連結星曜與水晶磁場，調和專屬能量指引中，請稍候片刻... ✨',
-    sender: {
-      name: '星曜守護導師 艾蓮',
-      iconUrl: 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?auto=format&fit=crop&w=128&h=128&q=80'
-    }
-  };
-
-  try {
-    await client.replyMessage({
-      replyToken: event.replyToken,
-      messages: [loadingMessage]
-    });
-    console.log('✅ Sent immediate loading message to LINE user to prevent timeout.');
-  } catch (replyErr) {
-    console.error('❌ Failed to send loading message:', replyErr);
-  }
-
   let responseText = '';
   let newMessage = null;
   let isGuide = false;
@@ -888,15 +868,15 @@ async function handleEvent(event, req) {
   }
 
   try {
-    console.log(`📨 Pushing to LINE user (${userId}) with ${replyMessage.type === 'flex' ? 'Flex Message Card' : 'Plain Text'}...`);
-    const replyResult = await client.pushMessage({
-      to: userId,
+    console.log(`📨 Replying to LINE user (${userId}) with ${replyMessage.type === 'flex' ? 'Flex Message Card' : 'Plain Text'}...`);
+    const replyResult = await client.replyMessage({
+      replyToken: event.replyToken,
       messages: [replyMessage]
     });
-    console.log('✅ Push sent successfully.');
+    console.log('✅ Reply sent successfully.');
     return replyResult;
   } catch (error) {
-    console.error('❌ Error pushing to LINE API:', error);
+    console.error('❌ Error replying to LINE API:', error);
     throw error;
   }
 }
