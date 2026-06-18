@@ -328,6 +328,8 @@ async function generateKeyPoints(responseText) {
 // ==========================================
 // 🎨 Colored Flex Message Bubble Builder
 // ==========================================
+// 🎨 Colored Flex Message Bubble Builder
+// ==========================================
 function buildFlexMessage(deity, points, msgId, iconUrl) {
   const styles = {
     ATHENA: {
@@ -405,42 +407,94 @@ function buildFlexMessage(deity, points, msgId, iconUrl) {
           }
         ]
       },
+      hero: {
+        type: "image",
+        url: iconUrl,
+        size: "full",
+        aspectRatio: "20:13",
+        aspectMode: "cover",
+        action: {
+          type: "uri",
+          uri: iconUrl
+        }
+      },
       body: {
         type: "box",
         layout: "vertical",
-        spacing: "md",
         contents: [
           {
             type: "text",
             text: style.title,
-            color: style.textColor,
-            size: "lg",
             weight: "bold",
-            align: "center"
+            size: "xl",
+            color: style.textColor
+          },
+          {
+            type: "box",
+            layout: "baseline",
+            margin: "md",
+            contents: [
+              {
+                type: "icon",
+                size: "sm",
+                url: "https://developers-resource.landpress.line.me/fx/img/review_gold_star_28.png"
+              },
+              {
+                type: "icon",
+                size: "sm",
+                url: "https://developers-resource.landpress.line.me/fx/img/review_gold_star_28.png"
+              },
+              {
+                type: "icon",
+                size: "sm",
+                url: "https://developers-resource.landpress.line.me/fx/img/review_gold_star_28.png"
+              },
+              {
+                type: "icon",
+                size: "sm",
+                url: "https://developers-resource.landpress.line.me/fx/img/review_gold_star_28.png"
+              },
+              {
+                type: "icon",
+                size: "sm",
+                url: "https://developers-resource.landpress.line.me/fx/img/review_gold_star_28.png"
+              },
+              {
+                type: "text",
+                text: "能量共鳴 5.0",
+                size: "sm",
+                color: style.accentColor,
+                margin: "md",
+                flex: 0,
+                weight: "bold"
+              }
+            ]
           },
           {
             type: "box",
             layout: "vertical",
-            spacing: "sm",
             margin: "lg",
-            contents: points.map(point => ({
+            spacing: "sm",
+            contents: points.map((point, index) => ({
               type: "box",
-              layout: "horizontal",
+              layout: "baseline",
+              spacing: "sm",
               contents: [
                 {
                   type: "text",
-                  text: "✦",
+                  text: `重點 \${index + 1}`,
                   color: style.accentColor,
                   size: "sm",
-                  flex: 1
+                  weight: "bold",
+                  flex: 2
                 },
                 {
                   type: "text",
                   text: point,
+                  wrap: true,
                   color: style.textColor,
                   size: "sm",
-                  flex: 11,
-                  wrap: true
+                  flex: 8
                 }
               ]
             }))
@@ -450,18 +504,21 @@ function buildFlexMessage(deity, points, msgId, iconUrl) {
       footer: {
         type: "box",
         layout: "vertical",
+        spacing: "sm",
         contents: [
           {
             type: "button",
+            style: "primary",
+            color: style.btnColor,
+            height: "sm",
             action: {
               type: "postback",
               label: "🔮 讀取完整智慧指引",
               data: `action=get_full_text&id=\${msgId}`
-            },
-            style: "primary",
-            color: style.btnColor
+            }
           }
-        ]
+        ],
+        flex: 0
       }
     }
   };
