@@ -1,98 +1,134 @@
-# 🔮 LINE Bot 靈魂與體驗雙重升級：動態守護神分身與 Cloud Run 背景 CPU 凍結踩坑實錄
+# 🔮 LINE Bot 互動體驗極致進化：雙選單（Dual Rich Menu）用戶端秒速切換與五宮格導覽實戰
 
-自從與我的 AI 神隊友 **Google Antigravity** 展開合作以來，我們的 LINE 智慧水晶占星助理已經經歷了多次進化。
+自從與我的 AI 神隊友 **Google Antigravity** 展開合作以來，我們的 LINE 智慧水晶占星助理已經完成了大腦（Gemini 2.5 多模態）、記憶（Google Cloud Firestore）與靈魂（動態守護神分身與 Cloud Run CPU 穩健調校）的完美升級。
 
-在上一階段的 Flex Message 卡片實驗中，雖然圖卡設計得非常精美，但在實際互動中，我們發現 LINE 的 Flex Layout Schema 在欄位格式上有著極其嚴格的格式校驗（不允許自訂頭像樣式，且極易因為格式錯誤被 LINE 拒絕接收）。
+然而，當用戶興致勃勃地加入好友後，最常遇到的問題是：**「雖然知道可以問問題，但不知道從何問起，手動輸入關鍵字也顯得有些麻煩。」**
 
-於是這一次，我與 Antigravity 決定「返璞歸真」——**拋棄繁瑣的 Flex Message 框架，改用極致擬真的「動態守護神分身切換」，在純文字的流暢閱讀體驗中，打造最有溫度的占星療癒感。**
+為了解決這個體驗痛點，我決定更進一步：**新增一張精緻的「五宮格功能導覽圖（五宮格.png）」，當用戶點擊主選單的左半邊時，能立即展現這張圖，並將其切分為 5 個可點擊的智慧區域（閱讀指南、認識水晶、淨化方法、功效與佩戴、回到上一頁）。**
 
-以下是我們在短短幾小時內，攜手攻克技術難關的合作實錄。
+這聽起來很簡單，但在實作過程中，我們遇到了 LINE 官方大圖限制、伺服器 Round-trip 延遲，以及複雜網格座標計算等技術關卡。以下是我們在短短半小時內，攜手攻克難關的開發實錄，讓你也可以直接複製這套黃金架構！
 
 ---
 
-## 🧩 第一關：動態守護神頭像切換與本機靜態託管 (Deity Icon Switch)
+## 🧩 第一關：大圖尺寸與 1MB 容量卡關？macOS 內建神兵 sips 救援
 
-我們希望占星機器人不要像冷冰冰的複讀機，而是能根據使用者諮詢的主題，主動化身為不同的星曜守護神：
-* 當問及事業、決策時，變身為 **「智慧守護神 雅典娜」**（深藍色系）；
-* 當問及桃花、人際時，變身為 **「金星守護神 維納斯」**（粉色系）；
-* 當問及整體運勢與逆行時，變身為 **「命運之輪 莫伊萊」**（金色系）；
-* 其他綜合解析則回歸預設的 **「星曜導師 艾蓮」**。
+LINE 官方對 Rich Menu 圖片上傳有著極其嚴格的規定：
+1. **尺寸限制**：寬度必須是 2500 px，高度必須是 1686 px（大型選單標準比例）。
+2. **容量限制**：圖片檔案大小**絕對不能超過 1MB**！
 
-為了解決這個需求，Antigravity 幫我設計了**雙重切換機制**：
+而我設計的 `五宮格.png` 是一張 `1254x1254 px` 的精美正方形圖檔，容量更高達 `2.05 MB`。如果直接上傳，LINE API 會立刻無情地拒絕並報錯。
 
-1. **語意標記偵測**：我們在 Gemini 2.5 Flash 的系統提示詞（System Instruction）中加入規範，讓 AI 自動在回覆內容的最開頭輸出標記（例如 `[DEITY: ATHENA]`）。
-2. **動態 Sender 轉換**：後端程式在發送訊息前，會利用正則表達式解析並移除該標記，隨後將其轉化為 LINE 訊息協定中的 `sender` 屬性，動態置換對話視窗中的暱稱與頭像。
+在我們目前的環境中，並沒有安裝 Python Pillow 或 Node.js 的 Sharp 等厚重的手動圖片處理庫。正當我發愁時，Antigravity 提出了 macOS 系統自帶的隱藏版命令列處理神器 —— **`sips` (Scriptable Image Processing System)**！
 
-```javascript
-// 動態切換 Sender 暱稱與頭像
-const replyMessage = {
-  type: 'text',
-  text: responseText,
-  sender: {
-    name: DEITY_CONFIG[deity].name,
-    iconUrl: iconUrl
+我們在終端機輸入這兩行指令：
+```bash
+# 1. 將圖片強制拉伸並等比例縮放至 LINE 規格 (2500x1686 px)
+sips -z 1686 2500 五宮格.png --out 五宮格_resized.png
+
+# 2. 將 PNG 轉檔為 JPEG，並進行 75% 的品質無損視覺壓縮
+sips -s format jpeg -s formatOptions 75 五宮格_resized.png --out 五宮格_resized.jpg
+```
+
+轉檔完成後，原本 2.05MB 的圖片，在保留極致細膩與鮮明畫質的同時，體積**奇蹟般地縮減到了 769KB**！完美符合 LINE 的限制，且不佔用任何專案包體積。
+
+---
+
+## 🧩 第二關：告別伺服器請求延遲！用 `richmenuswitch` 打造「零秒切換」
+
+傳統的 Rich Menu 切換做法是：
+* 使用者點擊按鈕 ➡️ 觸發 Webhook 送回伺服器 ➡️ 伺服器發送 API 請求將該 User 綁定新的 Rich Menu ID ➡️ 成功後回傳。
+
+雖然可行，但在行動網路下，使用者點擊按鈕後通常需要等待 **1 ~ 2 秒的空白加載期**，選單才會勉強切換，體驗很不流暢。
+
+為了解決這個問題，Antigravity 引進了 LINE 最新的 **`richmenuswitch`（選單別名切換動作）** 與 **Rich Menu Alias (選單別名)** 機制：
+
+> 💡 **原理說明**：
+> 我們在 LINE 伺服器端註冊兩個選單，並分別為它們配置全域唯一的別名（Alias）：
+> * 主選單別名：`alias_main_menu`
+> * 五宮格選單別名：`alias_five_grids`
+>
+> 接著，我們在選單區域（Areas）的點擊動作（Action）中，直接宣告 `type: "richmenuswitch"` 並指定目標別名。這樣一來，選單的跳轉將由 LINE 手機用戶端**本地直接渲染切換，完全不經過伺服器轉發**。
+
+切換過程達到了**物理級的 0 延遲**，點擊左半邊的瞬間，五宮格選單即刻滑出；點擊底部的「回到上一頁」，主選單立刻秒速收回，絲滑無比！
+
+```json
+// 在主選單中配置跳轉動作
+{
+  "bounds": { "x": 0, "y": 0, "width": 1250, "height": 1686 },
+  "action": {
+    "type": "richmenuswitch",
+    "richMenuAliasId": "alias_five_grids",
+    "data": "switch-to-five-grids"
   }
-};
+}
 ```
-
-為了讓守護神的頭像（`雅典娜.png`、`維納斯.png`、`莫伊萊.png`）穩定對外服務，我們不使用不穩定的外部圖床，而是直接由 Express 靜態託管本機檔案路由 `/static`，並在 Webhook 觸發時動態抓取請求的 Host 產出完整的實體 HTTPS 連結，實現完美的零外鏈依賴託管。
 
 ---
 
-## 🧩 第二關：解決 Cloud Run 背景 CPU 凍結造成的「沒反應」羅生門
+## 🧩 第三關：自動化編排雙選單 `setup-rich-menus.js` 一鍵部署
 
-在之前的架構優化中，我們為了避免 LINE 伺服器因為對話生成時間過長（Gemini 分析有時需要 3-4 秒）而判定逾時並發動 Webhook 重試，設計了一個看似非常完美的「非同步背景處理方案」：
-* 收到 Webhook 請求後，立刻向 LINE 秒回 HTTP 200 `OK`。
-* 將 Gemini 分析、Firestore 寫入、LINE API 回覆等非同步承諾丟到 Express 背景繼續執行。
+既然要建立兩個 Rich Menus，還要上傳各自的圖片、刪除舊的 Alias、註冊新的 Alias，最後再設定預設選單。這一連串手動呼叫 Postman 簡直是開發者的噩夢。
 
-**然而部署上去後，機器人卻出現了嚴重的「沒有反應」羅生門。**
+為此，Antigravity 幫我打造了全新的自動化配置腳本 [`setup-rich-menus.js`](./setup-rich-menus.js)。它會自動讀取 `.env` 檔案中的 Access Token，按順序執行以下 8 個完美步驟：
 
-在排查日誌後，我們發現了一條詭異的線索：有些使用者的訊息竟然卡了將近 4 分鐘才收到回覆。這時，Antigravity 發揮了強大的架構排查能力，幫我指出了 Google Cloud Run 的關鍵機制：
+1. **建立主選單**：宣告寬高 2500x1686 px，並在左半部綁定跳轉至 `alias_five_grids`。
+2. **上傳主選單圖片**：將 `richmenu_resized.jpg` 上傳至 LINE 伺服器。
+3. **建立五宮格選單**：宣告 5 個網格座標，並在底部「回到上一頁」區塊綁定跳轉至 `alias_main_menu`。
+4. **上傳五宮格圖片**：將壓縮後的 `五宮格_resized.jpg` 成功上傳。
+5. **清理舊的別名**：使用 `DELETE` API 清理可能重複的 `alias_main_menu` 與 `alias_five_grids`，防患未然。
+6. **建立別名 A**：註冊 `alias_main_menu` 指向主選單。
+7. **建立別名 B**：註冊 `alias_five_grids` 指向五宮格選單。
+8. **設定預設選單**：將主選單設為所有用戶的預設底圖。
 
-> 💡 **Cloud Run CPU 限制機制 (CPU Throttling)**：
-> Cloud Run 預設使用的是「僅在請求處理期間分配 CPU（CPU is only allocated during request processing）」。這意味著，一旦我們的 Webhook 路由執行了 `res.send('OK')` 並回傳，Cloud Run 會認為該次請求已經處理完畢，**瞬間將該容器實例的 CPU 資源配額降到接近 0！**
+我們只需在專案目錄下執行一行命令：
+```bash
+node setup-rich-menus.js
+```
+看著終端機亮起一整排綠色的 `✅`，所有選單架構便在 5 秒內全部註冊完畢，簡直舒爽！
 
-這導致我們丟在背景執行的非同步工作完全卡死。直到數分鐘後有其他使用者發送新訊息或新部署觸發容器喚醒，之前的背景執行緒才會「抽空」繼續執行。
+---
 
-**解決方案**：
-我們決定返璞歸真，將 Webhook 路由完全復原為同步的 `Promise.all` 等待：
+## 🧩 第四關：後端靜態高質感占星導覽，零 Token 消耗、100% 穩健秒回
+
+當使用者點擊五宮格的四個大區塊（閱讀指南、認識水晶、淨化方法、功效與佩戴）時，他們需要的是精準、有邏輯、結構清晰且排版吸睛的專業常識引導。
+
+如果我們把這些固定引導全部丟給 Gemini 2.5 Flash 生成：
+* 每次回應需要消耗 LLM 的 Token。
+* 每次分析需要耗費 2-3 秒的等待時間。
+* 大模型的輸出具有隨機性，排版可能不夠穩定。
+
+因此，最聰明的做法是：**由後端 Webhook 進行關鍵字攔截，直接秒回精心撰寫的靜態模板。**
+
+我與 Antigravity 在 [`index.js`](./index.js) 中精心設計了 4 套充滿「水晶占星專家」細膩、從容與療癒筆觸的高質感排版：
+
+* **「認識水晶」**：科普直覺共鳴法、脈輪挑選法（頂輪、心輪、海底輪），並附帶 Quick Replies 引導使用者分享生日或照片。
+* **「淨化方法」**：圖文並茂地解說「海鹽消磁法」、「薰香淨化法」、「月光溫養法」與「聲音共振法」的步驟與禁忌。
+* **「功效與佩戴」**：為讀者科普宇宙能量「左進（吸引/注入）、右出（釋放/守護）」的手腕佩戴玄學，以及不同頻率水晶的核心功效。
+
+當 Webhook 攔截到這四個點擊訊號時，便會繞過 AI 運算，**在 0.1 秒內直接回傳排版極其精緻的占星常識**，並搭配預載的智慧追問按鈕，既穩健、美觀，又完全零 API 成本！
 
 ```javascript
-app.post('/webhook', line.middleware(config), (req, res) => {
-  // 保持同步等待，確保 Cloud Run 分配 100% CPU 資源至對話完全結束
-  Promise.all(req.body.events.map((event) => handleEvent(event, req)))
-    .then((result) => res.json(result))
-    .catch((err) => {
-      console.error('❌ Error handling events:', err);
-      res.status(500).end();
-    });
-});
+if (userMessage === '使用指南' || userMessage === '使用說明' || userMessage === '閱讀指南') {
+  isGuide = true;
+  responseText = `🔮 歡迎來到【水晶與星盤能量諮詢室】使用指南 🔮...`;
+} else if (userMessage === '認識水晶') {
+  isGuide = true;
+  responseText = `🔮【宇宙的礦物脈動：認識水晶能量】🔮...`;
+} // ... 淨化方法、功效與佩戴以此類推
 ```
-
-雖然這樣會稍微延遲 Webhook 的回應時間，但因為 Gemini 2.5 Flash 本身效能極佳（通常 2~3 秒內即可完成），同步等待能確保 Cloud Run 在整個運算與回覆過程中**維持 100% 全速 CPU 運算**，訊息傳送後在 2 秒內就能流暢回覆，完全解決了 Hang 住的難題！
-
----
-
-## 🧩 第三關：專案部署與 Git Push 憑證問題
-
-最後，在將所有最新的開發結晶 Push 到 GitHub 倉庫時，我們又遇到了 macOS 金鑰圈（Keychain）不允許背景非互動式 TTY 存取的問題。
-
-對此，我直接生成了 GitHub 具有 repo 權限的 Personal Access Token，並由 Antigravity 將其寫入系統全域變數 `~/.zshrc`：
-
-```zsh
-export GITHUB_TOKEN=ghp_...
-```
-
-透過這種安全的 Token 憑證傳遞，我們免去了每次 Git Push 都要手動輸入密碼的繁瑣，順利將今天的完美代碼推播至 GitHub 倉庫中！
 
 ---
 
 ## 💬 結語
 
-這次與我的 AI 隊友 **Google Antigravity** 的合作，讓我深刻體會到「好產品不一定需要最炫技的 UI，最適合的架構與最流暢的體驗才是關鍵」。
+在這部曲的進化中，我們展示了 **「如何用最輕量級的手法，創造最高規的產品體驗」**。
 
-我們主動放棄了欄位嚴格且不具備 Sender 自訂頭像靈活性的 Flex Message，轉而利用**標準文字結合動態守護神變身**，反而創造出了更有沉浸感、更有溫度的互動體驗。同時，這次 Cloud Run CPU 凍結的踩坑經驗，也為我們在無伺服器（Serverless）架構下開發 API 提供了極具價值的技術儲備。
+* 我們沒有安裝任何複雜的圖片處理 npm 套件，而是用 macOS 原生的 `sips` 解決了圖片壓縮難關。
+* 我們摒棄了繁複的伺服器端連結綁定，利用 `richmenuswitch` 將選單切換體驗推到了物理級的「零延遲」滑順。
+* 我們結合了「即時大腦生成（Gemini）」與「高質感預設導覽（Webhook 靜態攔截）」，在兼顧零 Token 成本的同時，大幅提升了 LINE Bot 的商業穩健度與引導轉化率。
 
-如果您也對打造這款有溫度、會認人、還會七十二變的水晶占星機器人感興趣，歡迎參考我們最新一期的開源程式碼！
+現在，這套完整的雙選單設定腳本與靜態高質感導覽程式碼，已經成功熱更新部署至 Google Cloud Run，並上傳至 GitHub 倉庫中！
 
-🔗 **專案 GitHub 倉庫**：https://github.com/zonawang/line-icon-switch.git
+🔗 **專案 GitHub 倉庫**：https://github.com/zonawang/line-rich-menu-switch
+
+如果你也想為你的 LINE Bot 打造一套有質感、高流暢度、又極具互動層次感的 Rich Menu 體驗，歡迎點擊倉庫參考我們的實作！我們下一章節見！

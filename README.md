@@ -1,55 +1,48 @@
-# 🔮 LINE Crystal Astrology Expert Bot - 本次新增功能說明
+# 🔮 LINE Crystal Astrology Bot - 雙選單流暢切換與五宮格導覽升級 🔮
 
-本專案已完成最新階段的升級開發，完美解決了 LINE 頭像切換靈活性與 Google Cloud Run 執行緒凍結的問題。以下為本次新增之核心特色功能與雲端架構設計說明。
-
----
-
-## 🌟 本次新增核心特色功能
-
-### 1. 🪐 動態守護神頭像與暱稱切換 (Deity Icon Switch)
-* **智慧偵測切換**：機器人會依據當下諮詢的主題（如事業、愛情、財運），自動在回覆最開頭帶入守護神標記（如 `[DEITY: ATHENA]`、`[DEITY: VENUS]`、`[DEITY: FORTUNE]`、`[DEITY: COSMOS]`）。
-* **動態 Sender 變更**：系統在向 LINE 發送訊息前，會主動解析標記並移除，同時將 LINE 訊息的 `sender.name` 與 `sender.iconUrl` 動態變更為對應的守護神暱稱與專屬頭像（雅典娜、維納斯、莫伊萊、艾蓮）。
-* **靜態資源本機託管**：頭像圖檔（`雅典娜.png`、`維納斯.png`、`莫伊萊.png`）直接託管於專案根目錄下，透過 Express 靜態路由 `/static` 動態產出對外網址，實現零外鏈依賴。
+本專案已完成最新階段的升級，引進了 **LINE 雙選單（Dual Rich Menu）無縫用戶端切換**，搭配極具質感的**五宮格導覽設計**與**後端高質感靜態導覽回覆**。
 
 ---
 
-## 💡 關鍵雲端架構注意事項 (重要)
+## 🌟 本次新增核心功能
 
-### 📌 為什麼 Webhook 必須使用「同步 `Promise.all`」？
-在部署至 Google Cloud Run 時，必須特別注意其 CPU 分配機制：
-* **Cloud Run CPU 限制機制 (CPU Throttling)**：
-  Cloud Run 預設使用的是 **「僅在請求處理期間分配 CPU」**。如果 Webhook 路由採取 `res.send('OK')` 秒回 LINE，而把分析與回覆放在背景非同步執行，**Cloud Run 會在回覆發出的瞬間將容器的 CPU 限制降到接近 0**。
-* **解決「沒有反應」問題**：
-  這會造成背景的 Gemini 占星呼叫與 Firestore 讀寫完全卡死或運作極度緩慢。因此，本專案將 Webhook 改回穩定的同步 `Promise.all` 處理：
-  ```javascript
-  Promise.all(req.body.events.map((event) => handleEvent(event, req)))
-    .then((result) => res.json(result))
-  ```
-  這能確保在 Gemini 處理（約 2~3 秒）期間，CPU 始終獲得 100% 完整分配，保證 LINE 訊息能以最快速度完成回覆。
+### 1. 🔀 用戶端雙選單流暢切換 (Client-side Rich Menu Switch)
+* **零延遲切換**：摒棄了傳統伺服器端重新連結選單的繁複請求，改用 LINE Messaging API 的 `richmenuswitch` 動作，配合 `alias_main_menu` 與 `alias_five_grids` 別名。
+* **雙向跳轉**：
+  * 當用戶點擊**主選單左半部**時，選單會瞬間切換成極具儀式感的「五宮格導覽圖」。
+  * 當用戶在五宮格選單中點擊底部的**「回到上一頁」**時，會秒速切換回原本的主選單。
+* **完全離線級觸發**：切換過程在手機本地端直接完成，無需等待伺服器 round-trip 處理，打造絲滑的互動體驗。
+
+### 2. 🎨 精美五宮格導覽與圖片極致壓縮
+* **視覺美化**：我們將 `五宮格.png` 依據 LINE 官方 Rich Menu 規格，等比例縮放至標準大選單尺寸 `2500x1686 px`。
+* **無損畫質高壓縮 (769KB)**：針對 LINE 限制 Rich Menu 圖片必須在 1MB 以內的硬性規定，我們使用優化技術將其轉為 75% 壓縮率的 JPEG（`五宮格_resized.jpg`），成功在保持絕對精緻視覺的前提下，將體積壓到 `769KB` 順利上傳。
+
+### 3. 🗺️ 五格客製化區域配置 (2x2 + 1 網格)
+* **Top-Left (0, 0, 1250, 674)** ➡️ 點擊發送文字「**閱讀指南**」
+* **Top-Right (1250, 0, 1250, 674)** ➡️ 點擊發送文字「**認識水晶**」
+* **Mid-Left (0, 674, 1250, 674)** ➡️ 點擊發送文字「**淨化方法**」
+* **Mid-Right (1250, 674, 1250, 674)** ➡️ 點擊發送文字「**功效與佩戴**」
+* **Bottom (0, 1348, 2500, 338)** ➡️ 用戶端無縫切換回主選單別名（`alias_main_menu`）
+
+### 4. 💬 後端高質感專家導覽回覆
+* 當 Webhook 偵測到用戶點擊五宮格發送的關鍵字時，會自動繞過 LLM 分析，直接輸出精心撰寫、具備高度知性與療癒美感的排版模板，並附帶對應的 Quick Replies 引導。這不僅節省了 API Token，更能保證 100% 穩健且秒速的回覆：
+  * **「閱讀指南」**：指引生日提供與水晶照鑑定流程。
+  * **「認識水晶」**：教授如何透過直覺與脈輪尋找專屬守護水晶。
+  * **「淨化方法」**：詳細剖析海鹽、薰香、月光與聲波四大水晶充能法則。
+  * **「功效與佩戴」**：科普人體氣場左手（注入能量）與右手（釋放淨化）的佩戴玄學。
 
 ---
 
-## 🛠️ 本地開發與部署設定
+## 🛠️ 部署與環境建立
+專案中使用全新寫就的 [`setup-rich-menus.js`](./setup-rich-menus.js) 設定腳本，可自動進行雙選單建立、圖片上傳、Alias 別名註冊及主選單預設。
 
-### 1. 執行環境
-* **Node.js**：推薦 Node 22 以上（本專案已在 `node:22-alpine` 容器下，透過 `--experimental-require-module` 解決 CJS 同步載入 ESM 的載入問題）。
-
-### 2. 環境變數 (`.env`)
-```env
-PORT=8080
-LINE_CHANNEL_SECRET=您的_Channel_Secret
-LINE_CHANNEL_ACCESS_TOKEN=您的_Channel_Access_Token
-GCP_PROJECT=您的_GCP_專案ID
-GCP_LOCATION=us-central1
-VERTEX_AI_MODEL=gemini-2.5-flash
-GITHUB_TOKEN=您的_GitHub_Token
+### 一鍵註冊/重設 Rich Menus：
+確保您的 `.env` 檔案內包含正確的 `LINE_CHANNEL_ACCESS_TOKEN`，接著在專案目錄下執行：
+```bash
+node setup-rich-menus.js
 ```
 
-### 3. 一鍵部署至 Cloud Run
+### 一鍵部署至 Cloud Run：
 ```bash
-gcloud run deploy line-echo-bot \
-  --source . \
-  --region asia-east1 \
-  --allow-unauthenticated \
-  --update-env-vars="GCP_PROJECT=您的_GCP_專案ID,GCP_LOCATION=us-central1,VERTEX_AI_MODEL=gemini-2.5-flash"
+gcloud run deploy line-echo-bot --source . --region asia-east1
 ```
