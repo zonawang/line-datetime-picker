@@ -211,8 +211,18 @@ app.get('/', (req, res) => {
   res.send('LINE Crystal Astrology Expert Bot with Google ADK is running!');
 });
 
+// 🔒 Webhook 重複事件與重試阻斷快取 (防止 LINE 逾時重試與 Serverless 容器 CPU 凍結問題)
+const activeEvents = new Set();
+const completedEvents = new Set();
+
+setInterval(() => {
+  activeEvents.clear();
+  completedEvents.clear();
+  console.log('🧹 [Deduplication] Cleaned up processed & active events cache.');
+}, 600000); // 每 10 分鐘自動清空快取
+
 // Webhook endpoint
-app.post('/webhook', line.middleware(config), (req, res) => {
+app.post('/webhook', line.middleware(config), async (req, res) => {
   if (!req.body || !req.body.events) {
     return res.status(400).send('No events found in request body.');
   }
@@ -224,13 +234,54 @@ app.post('/webhook', line.middleware(config), (req, res) => {
   const baseUrl = `${protocol}://${req.get('host')}`;
   req.baseUrlForIcons = baseUrl;
 
-  Promise
-    .all(req.body.events.map((event) => handleEvent(event, req)))
-    .then((result) => res.json(result))
-    .catch((err) => {
-      console.error('❌ Error handling events:', err);
-      res.status(500).end();
-    });
+  // 在雲端 Serverless 環境下 (如 Cloud Run)，如果立即回傳 200 OK，CPU 會被立即凍結 (Throttled)。
+  // 因此，我們必須在 Promise.all 中「保持原連線開啟 (不回傳)」以維持 CPU 動能；
+  // 同時，若 LINE 因為超時（超過 5 秒）重新發送重試請求，重試請求會被偵測並「立即回覆 200 OK」丟棄，避免重複執行！
+  try {
+    const results = await Promise.all(
+      req.body.events.map(async (event) => {
+        const eventId = event.webhookEventId;
+
+        if (eventId) {
+          // 情況 A：如果這個事件之前已經完整處理過了，直接回覆並略過
+          if (completedEvents.has(eventId)) {
+            console.log(`⚠️ [Deduplication] Event "${eventId}" was already completed. Ignoring.`);
+            return 'OK';
+          }
+
+          // 情況 B：如果這個事件目前「正在背景執行中」（表示這是 LINE 的超時重試），立即回傳 OK 以防止 LINE 再次重試
+          if (activeEvents.has(eventId)) {
+            console.log(`⚠️ [Deduplication] Event "${eventId}" is currently processing. Ignoring retry request.`);
+            return 'OK';
+          }
+
+          // 標記為正在處理中
+          activeEvents.add(eventId);
+        }
+
+        try {
+          // 呼叫主邏輯處理事件 (保持 CPU 分配活絡)
+          const result = await handleEvent(event, req);
+          
+          if (eventId) {
+            completedEvents.add(eventId);
+          }
+          return result;
+        } finally {
+          // 處理完畢（不論成功或失敗），自處理中名單移除
+          if (eventId) {
+            activeEvents.delete(eventId);
+          }
+        }
+      })
+    );
+
+    // 所有事件處理完畢後，安全回覆原連線
+    res.json(results);
+  } catch (err) {
+    console.error('❌ Error handling webhook events:', err);
+    res.status(500).end();
+  }
 });
 
 // ==========================================
@@ -319,6 +370,16 @@ async function handleEvent(event, req) {
   const sessionId = `session_${userId}`; // Session is scoped per user
   const messageType = event.message.type;
   console.log(`💬 Processing message from User (${userId}) of type: ${messageType}`);
+
+  // ⏳ 顯示讀取中動畫 (僅適用於 1-on-1 個人對話，預設顯示 15 秒，發送回覆時會自動消失)
+  if (event.source.type === 'user' && userId) {
+    try {
+      console.log(`⏳ Displaying loading animation for user: ${userId}`);
+      await client.showLoadingAnimation({ chatId: userId, loadingSeconds: 15 });
+    } catch (err) {
+      console.error('⚠️ Failed to show loading animation:', err);
+    }
+  }
 
   let responseText = '';
   let newMessage = null;
