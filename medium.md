@@ -161,3 +161,12 @@ setInterval(() => {
 這一次與 Antigravity 的協作，不僅美化了使用者的視覺感官，更是對後端分散式併發與 Serverless 資源調度的硬核優化。
 
 如果你也正在開發 LLM 驅動的 LINE Bot，快把這套「連線保持 + 雙重 Set 去重 + 載入動畫」的黃金架構打包帶走吧！
+
+---
+
+### 📂 專案開源與完整程式碼
+本專案的完整程式碼、Dockerfile、設定檔案及防重複防護邏輯已全面開源至 GitHub。歡迎點擊下方連結進行 Star、Fork 或深入研究：
+
+👉 **GitHub 儲存庫：[https://github.com/zonawang/line-loading-animation](https://github.com/zonawang/line-loading-animation)**
+
+如果您在部署或使用過程中遇到任何技術細節問題，也歡迎在儲存庫中發起 Issue 與我們一起探討交流！✨
