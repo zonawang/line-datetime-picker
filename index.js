@@ -355,6 +355,24 @@ const DEITY_CONFIG = {
 // 🎯 Event Handler
 // ==========================================
 async function handleEvent(event, req) {
+  // Handle postback event specifically for datetime picker
+  if (event.type === 'postback') {
+    const data = event.postback.data;
+    if (data === 'action=select_birthday') {
+      const selectedDate = event.postback.params?.date;
+      if (selectedDate) {
+        console.log(`📅 Postback received: User selected birthday: ${selectedDate}`);
+        // Convert postback to a virtual text message event
+        event.type = 'message';
+        event.message = {
+          type: 'text',
+          id: `postback_${Date.now()}`,
+          text: `老師，我的生日是 ${selectedDate}`
+        };
+      }
+    }
+  }
+
   // Ignore non-message events
   if (event.type !== 'message') {
     return null;
@@ -596,11 +614,31 @@ async function handleEvent(event, req) {
   // 6. Generate follow-up Quick Replies
   let followUpQuestions = null;
   if (isGuide) {
-    followUpQuestions = [
-      '我生日1995年10月12日',
-      '如何鑑定我的水晶？',
-      '天秤座適合戴什麼？'
-    ];
+    const userMsgText = event.message.type === 'text' ? event.message.text.trim() : '';
+    if (userMsgText === '認識水晶') {
+      followUpQuestions = [
+        {
+          type: 'action',
+          action: {
+            type: 'datetimepicker',
+            label: '輸入生日',
+            data: 'action=select_birthday',
+            mode: 'date',
+            initial: '2000-01-01',
+            min: '1900-01-01',
+            max: '2026-12-31'
+          }
+        },
+        '如何鑑定我的水晶？',
+        '天秤座適合戴什麼？'
+      ];
+    } else {
+      followUpQuestions = [
+        '我生日1995年10月12日',
+        '如何鑑定我的水晶？',
+        '天秤座適合戴什麼？'
+      ];
+    }
   } else {
     followUpQuestions = await generateFollowUpQuestions(responseText);
   }
@@ -624,14 +662,20 @@ async function handleEvent(event, req) {
 
   if (followUpQuestions && followUpQuestions.length > 0) {
     replyMessage.quickReply = {
-      items: followUpQuestions.map(question => ({
-        type: 'action',
-        action: {
-          type: 'message',
-          label: question,
-          text: question
+      items: followUpQuestions.map(item => {
+        if (typeof item === 'string') {
+          return {
+            type: 'action',
+            action: {
+              type: 'message',
+              label: item,
+              text: item
+            }
+          };
+        } else {
+          return item;
         }
-      }))
+      })
     };
     console.log(`[QuickReply] Attached ${followUpQuestions.length} buttons to response.`);
   }
