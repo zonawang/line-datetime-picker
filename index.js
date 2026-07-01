@@ -352,6 +352,57 @@ const DEITY_CONFIG = {
 };
 
 // ==========================================
+// 📅 Life Path Number Helpers (生命靈數計算與日期解析)
+// ==========================================
+function extractBirthdate(text) {
+  if (typeof text !== 'string') return null;
+  // Try matching YYYY-MM-DD or YYYY/MM/DD or YYYY年MM月DD日
+  const match1 = text.match(/(\d{4})[-/年\s](\d{1,2})[-/月\s](\d{1,2})[日\s]?/);
+  if (match1) {
+    return {
+      year: parseInt(match1[1], 10),
+      month: parseInt(match1[2], 10),
+      day: parseInt(match1[3], 10)
+    };
+  }
+
+  // Try matching YYYYMMDD (8 digits)
+  const match2 = text.match(/\b(\d{4})(\d{2})(\d{2})\b/);
+  if (match2) {
+    return {
+      year: parseInt(match2[1], 10),
+      month: parseInt(match2[2], 10),
+      day: parseInt(match2[3], 10)
+    };
+  }
+
+  return null;
+}
+
+function calculateLifePathNumber(year, month, day) {
+  const digitsStr = `${year}${month}${day}`;
+  let sum = 0;
+  for (let i = 0; i < digitsStr.length; i++) {
+    const char = digitsStr[i];
+    if (char >= '0' && char <= '9') {
+      sum += parseInt(char, 10);
+    }
+  }
+
+  // Keep summing digits until we have a single digit (1-9)
+  while (sum > 9) {
+    let tempSum = 0;
+    const sumStr = String(sum);
+    for (let i = 0; i < sumStr.length; i++) {
+      tempSum += parseInt(sumStr[i], 10);
+    }
+    sum = tempSum;
+  }
+
+  return sum;
+}
+
+// ==========================================
 // 🎯 Event Handler
 // ==========================================
 async function handleEvent(event, req) {
@@ -624,9 +675,7 @@ async function handleEvent(event, req) {
             label: '輸入生日',
             data: 'action=select_birthday',
             mode: 'date',
-            initial: '2000-01-01',
-            min: '1900-01-01',
-            max: '2026-12-31'
+            initial: '2000-01-01'
           }
         },
         '如何鑑定我的水晶？',
@@ -641,6 +690,29 @@ async function handleEvent(event, req) {
     }
   } else {
     followUpQuestions = await generateFollowUpQuestions(responseText);
+  }
+
+  // If the user's incoming message contains a birthdate, insert "了解我的生命靈數" quick reply button
+  if (event.message?.type === 'text') {
+    const extracted = extractBirthdate(event.message.text);
+    if (extracted) {
+      const lifePathNumber = calculateLifePathNumber(extracted.year, extracted.month, extracted.day);
+      const lifePathButton = {
+        type: 'action',
+        action: {
+          type: 'message',
+          label: '了解我的生命靈數',
+          text: `老師，請幫我解析我的生命靈數是 ${lifePathNumber}`
+        }
+      };
+
+      if (!followUpQuestions) {
+        followUpQuestions = [lifePathButton];
+      } else {
+        // Prepend and limit to 3 options
+        followUpQuestions = [lifePathButton, ...followUpQuestions].slice(0, 3);
+      }
+    }
   }
 
   // Resolve dynamic URL for local images served via /static
